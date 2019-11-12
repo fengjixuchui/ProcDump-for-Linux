@@ -1,4 +1,4 @@
-# ProcDump [![Build Status](https://travis-ci.org/Microsoft/ProcDump-for-Linux.svg?branch=master)](https://travis-ci.org/Microsoft/ProcDump-for-Linux)
+# ProcDump [![Build Status](https://oss-sysinternals.visualstudio.com/Procdump%20for%20Linux/_apis/build/status/microsoft.ProcDump-for-Linux?branchName=master)](https://oss-sysinternals.visualstudio.com/Procdump%20for%20Linux/_build/latest?definitionId=10&branchName=master)
 ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinternals suite of tools for Windows.  ProcDump provides a convenient way for Linux developers to create core dumps of their application based on performance triggers.
 
 ![ProcDump in use](procdump.gif "Procdump in use")
@@ -9,31 +9,18 @@ ProcDump is a Linux reimagining of the classic ProcDump tool from the Sysinterna
 * Minimum OS:
   * Red Hat Enterprise Linux / CentOS 7
   * Fedora 26
-  * Mageia 6
   * Ubuntu 14.04 LTS
-  * We are actively testing against other Linux distributions.  If you have requests for specific distros, please let us know (or create a pull request with the necessary changes).
 * `gdb` >= 7.6.1
 * `zlib` (build-time only)
 
 ## Install ProcDump
-### Via Package Manager [prefered method]
+### Via Package Manager [preferred method]
 
-#### 1. Add the Microsoft Product feed
+#### 1. Register Microsoft key and feed
 ```sh
-curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
-sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
+wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
 ```
-##### Register the Microsoft Product feed
-##### Ubuntu 16.04
-```sh
-sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-xenial-prod xenial main" > /etc/apt/sources.list.d/microsoft.list'
-
-```
-##### Ubuntu 14.04
-```sh
-sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-trusty-prod trusty main" > /etc/apt/sources.list.d/microsoft.list'
-```
-
 #### 2. Install Procdump
 ```sh
 sudo apt-get update

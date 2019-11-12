@@ -57,8 +57,13 @@ void *SignalThread(void *input)
 //--------------------------------------------------------------------
 void InitProcDump()
 {
-    InitProcDumpConfiguration(&g_config);
     openlog("ProcDump", LOG_PID, LOG_USER);
+    if(CheckKernelVersion() == false)
+    {
+        Log(error, "Kernel version lower than 3.5+.");
+        exit(-1);
+    }
+    InitProcDumpConfiguration(&g_config);
     pthread_mutex_init(&LoggerLock, NULL);
 }
 
@@ -145,7 +150,10 @@ void FreeProcDumpConfiguration(struct ProcDumpConfiguration *self)
 
     sem_destroy(&(self->semAvailableDumpSlots.semaphore));
 
-    free(self->ProcessName);
+    if(strcmp(self->ProcessName, EMPTY_PROC_NAME) != 0){
+        // The string constant is not on the heap.
+        free(self->ProcessName);
+    }
 }
 
 //--------------------------------------------------------------------
@@ -285,9 +293,6 @@ int GetOptions(struct ProcDumpConfiguration *self, int argc, char *argv[])
 
     if(!self->WaitingForProcessName) {
         self->ProcessName = GetProcessName(self->ProcessId);
-        if (self->ProcessName == NULL) {
-            Log(error, "Error getting process name.");
-	    }
     }
 
     Trace("GetOpts and initial Configuration finished");
@@ -346,7 +351,7 @@ bool WaitForProcessName(struct ProcDumpConfiguration *self)
         for (int i = 0; i < numEntries; i++) {
             pid_t procPid = atoi(nameList[i]->d_name);
             char *nameForPid = GetProcessName(procPid);
-            if (nameForPid == NULL) {
+            if (strcmp(nameForPid, EMPTY_PROC_NAME) == 0) {
                 continue;
             }
             if (strcmp(nameForPid, self->ProcessName) == 0) {
@@ -381,41 +386,49 @@ bool WaitForProcessName(struct ProcDumpConfiguration *self)
 
 //--------------------------------------------------------------------
 //
-// GetProcessName - Get process name using PID provided  
+// GetProcessName - Get process name using PID provided.
+//                  Returns EMPTY_PROC_NAME for null process name.
 //
 //--------------------------------------------------------------------
 char * GetProcessName(pid_t pid){
 	char procFilePath[32];
-	char fileBuffer[MAX_CMDLINE_LEN];		// maximum command line length on Linux
+	char fileBuffer[MAX_CMDLINE_LEN];
 	int charactersRead = 0;
 	int	itr = 0;
 	char * stringItr;
 	char * processName;
 	FILE * procFile;
 	
-	if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
-		return NULL;
+	
+        if(sprintf(procFilePath, "/proc/%d/cmdline", pid) < 0){
+		return EMPTY_PROC_NAME;
 	}
+
 	procFile = fopen(procFilePath, "r");
 
 	if(procFile != NULL){
-		if((charactersRead = fread(fileBuffer, sizeof(char), MAX_CMDLINE_LEN, procFile)) == 0) {
-			Log(debug, "Failed to read from %s.\n", procFilePath);
-			fclose(procFile);
-			return NULL;
+		if(fgets(fileBuffer, MAX_CMDLINE_LEN, procFile) == NULL) {
+	    		fclose(procFile);
+			if(strlen(fileBuffer) == 0){
+                		Log(debug, "Empty cmdline.\n");
+            		}else{
+	        		Log(debug, "Failed to read from %s.\n", procFilePath);
+			}
+			return EMPTY_PROC_NAME;
 		}
-	
 		// close file
 		fclose(procFile);
 	}
 	else{
 		Log(debug, "Failed to open %s.\n", procFilePath);
-		return NULL;
+		return EMPTY_PROC_NAME;
 	}
 	
+
 	// Extract process name
 	stringItr = fileBuffer;
-	for(int i = 0; i < charactersRead; i++){
+	charactersRead  = strlen(fileBuffer);
+	for(int i = 0; i <= charactersRead; i++){
 		if(fileBuffer[i] == '\0'){
 			itr = i - itr;
 			
@@ -436,7 +449,7 @@ char * GetProcessName(pid_t pid){
 	}
 
 	Log(debug, "Failed to extract process name from /proc/PID/cmdline");
-	return NULL;
+	return EMPTY_PROC_NAME;
 }
 
 //--------------------------------------------------------------------
@@ -724,6 +737,36 @@ bool IsValidNumberArg(const char *arg)
     return true;
 }
 
+//--------------------------------------------------------------------
+//
+// CheckKernelVersion - Check to see if current kernel is 3.5+.
+// 
+// ProcDump won't proceed if current kernel is less than 3.5.
+// Returns true if >= 3.5+, returns false otherwise or error.
+//--------------------------------------------------------------------
+bool CheckKernelVersion()
+{
+    struct utsname kernelInfo;
+    if(uname(&kernelInfo) == 0)
+    {
+        int version, patch = 0;
+        if(sscanf(kernelInfo.release,"%d.%d",&version,&patch) != 2)
+        {
+            Log(error, "Cannot validate kernel version");
+            Trace("%s",strerror(errno));
+            return false;
+        }
+
+        if(version > MIN_KERNEL_VERSION) return true;
+        if(version == MIN_KERNEL_VERSION && patch >= MIN_KERNEL_PATCH) return true;
+
+    }
+    else
+    {
+        Log(error, strerror(errno));
+    }
+    return false;
+}
 
 //--------------------------------------------------------------------
 //
